@@ -24,12 +24,15 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
 """
 
 import os
+from typing import Dict
+import nni
 import time
 import json
 import csv
 import shutil
 import yaml
 import numpy as np
+from tensorflow.keras.callbacks import Callback
 from tensorflow.config import list_physical_devices
 
 import imgaug  # https://github.com/aleju/imgaug (pip3 install imgaug)
@@ -38,7 +41,6 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from pycocotools import mask as maskUtils
 import urllib.request
-import shutil
 
 # Import Mask RCNN
 from mrcnn.config import Config
@@ -291,7 +293,7 @@ def evaluate(dataset_dir, model, limit):
     evaluate_coco(model, dataset_val, coco, "bbox", limit=int(limit))
 
 
-def train(params, model, config, train_dataset, val_dataset, output_folder, use_validation=False):
+def train(params, model, config, train_dataset, val_dataset, output_folder, use_validation=False, use_nni=False):
     # Training dataset. Use the training set and 35K from the
     # validation set, as as in the Mask RCNN paper.
     dataset_train = OnepanelDataset()
@@ -308,6 +310,9 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
 
     # Image Augmentation
     augmentation = get_augmentations(params)
+    custom_callbacks = None
+    if use_nni:
+        custom_callbacks = [ReportIntermediates]
 
     # *** Training schedule ***
 
@@ -318,7 +323,8 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
                     learning_rate=config.LEARNING_RATE,
                     epochs=params['stage_1_epochs'],
                     layers='heads',
-                    augmentation=augmentation)
+                    augmentation=augmentation,
+                    custom_callbacks=custom_callbacks)
     else:
         print("First stage skipped, {} sent as num of first stage epochs".format(params['stage_1_epochs']))
 
@@ -330,7 +336,8 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
                     learning_rate=config.LEARNING_RATE,
                     epochs=params['stage_2_epochs'],
                     layers='4+',
-                    augmentation=augmentation)
+                    augmentation=augmentation,
+                    custom_callbacks=custom_callbacks)
     else:
         print("Second stage skipped, {} sent as num of second stage epochs".format(params['stage_2_epochs']))
 
@@ -342,7 +349,8 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
                     learning_rate=config.LEARNING_RATE / 10,
                     epochs=params['stage_3_epochs'],
                     layers='all',
-                    augmentation=augmentation)
+                    augmentation=augmentation,
+                    custom_callbacks=custom_callbacks)
     else:
         print("Third stage skipped, {} sent as num of third stage epochs".format(params['stage_3_epochs']))
 
@@ -355,6 +363,18 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
 ############################################################
 #  Utils
 ############################################################
+
+class ReportIntermediates(Callback):
+    """
+    Callback class for reporting intermediate accuracy metrics.
+    This callback sends accuracy to NNI framework every 100 steps,
+    so you can view the learning curve on web UI.
+    If an assessor is configured in experiment's YAML file,
+    it will use these metrics for early stopping.
+    """
+    def on_epoch_end(self, epoch, logs=None):
+        """Reports intermediate accuracy to NNI framework"""
+        nni.report_intermediate_result(logs['val_accuracy'])
 
 def generate_csv(input_file, output_file):
 	with open(input_file) as f:
@@ -379,20 +399,25 @@ def preprocess_inputs(args):
     print("Num Classes: ", args.num_classes)
     print("Extras: ", args.extras)
     try:
-        params = yaml.load(args.extras)
+        if args.extras:
+            params = yaml.load(args.extras)
+        else:
+            print('Parameters were not provided, using defaults')
+            params = dict()
     except:
         raise ValueError('Parameters must have a valid YAML format')
     if not isinstance(params, dict):
         raise TypeError('Parameters must have a valid YAML format')
-    params['steps_per_epoch'] = params.pop('num_steps')
-    params['num_classes'] = int(args.num_classes) + 1
-
+    
     if 'stage-1-epochs' in params:
         params['stage_1_epochs'] = params.pop('stage-1-epochs')
     if 'stage-2-epochs' in params:
         params['stage_2_epochs'] = params.pop('stage-2-epochs')
     if 'stage-3-epochs' in params:
         params['stage_3_epochs'] = params.pop('stage-3-epochs')
+    if 'num_steps' in params:
+        params['steps_per_epoch'] = params.pop('num_steps')
+    params['num_classes'] = int(args.num_classes) + 1
 
     # Check num epochs sanity
     if 'stage_1_epochs' in params and 'stage_2_epochs' in params and 'stage_3_epochs' in params:
@@ -400,7 +425,7 @@ def preprocess_inputs(args):
         params['stage_2_epochs'] = params['stage_1_epochs'] + int(params['stage_2_epochs'])
         params['stage_3_epochs'] = params['stage_2_epochs'] + int(params['stage_3_epochs'])
     else:
-        print('Num of epochs at each stage not provided, using default ones')
+        print('Num of epochs for each stage not provided, using default ones')
         params['stage_1_epochs'] = 1
         params['stage_2_epochs'] = 2
         params['stage_3_epochs'] = 3
@@ -507,6 +532,10 @@ def main(args):
 
     params = preprocess_inputs(args)
 
+    if args.use_nni:
+        tuned_params = nni.get_next_parameter()
+        params.update(tuned_params)
+
     # Configurations
     config = get_config(args.command, params)
     config.display()
@@ -557,6 +586,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_classes', default=81, help="Number of classes present in a dataset")
     parser.add_argument('--ref_model_path', default='', help="ref model path")
     parser.add_argument('--use_validation', default=False, type=bool)
+    parser.add_argument('--use_nni', default=False, type=bool)
     args = parser.parse_args()
     
     # Run Workflow
