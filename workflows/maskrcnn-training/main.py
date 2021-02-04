@@ -315,11 +315,12 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
         custom_callbacks = [ReportIntermediates]
 
     # *** Training schedule ***
+    history = dict()
 
     # Training - Stage 1
     if params['stage_1_epochs'] > 0:
         print("Training network heads")
-        model.train(dataset_train, dataset_val,
+        history = model.train(dataset_train, dataset_val,
                     learning_rate=config.LEARNING_RATE,
                     epochs=params['stage_1_epochs'],
                     layers='heads',
@@ -332,7 +333,7 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
     # Finetune layers from ResNet stage 4 and up
     if params['stage_2_epochs'] > params['stage_1_epochs']:
         print("Fine tune Resnet stage 4 and up")
-        model.train(dataset_train, dataset_val,
+        history = model.train(dataset_train, dataset_val,
                     learning_rate=config.LEARNING_RATE,
                     epochs=params['stage_2_epochs'],
                     layers='4+',
@@ -345,7 +346,7 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
     # Fine tune all layers
     if params['stage_3_epochs'] > params['stage_2_epochs']:
         print("Fine tune all layers")
-        model.train(dataset_train, dataset_val,
+        history = model.train(dataset_train, dataset_val,
                     learning_rate=config.LEARNING_RATE / 10,
                     epochs=params['stage_3_epochs'],
                     layers='all',
@@ -358,6 +359,8 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
     print("Training complete\n Extracting trained model")
     extract_model(train_dataset, output_folder, config, params)
     print("Workflow complete!")
+
+    return history
 
 
 ############################################################
@@ -373,8 +376,8 @@ class ReportIntermediates(Callback):
     it will use these metrics for early stopping.
     """
     def on_epoch_end(self, epoch, logs=None):
-        """Reports intermediate accuracy to NNI framework"""
-        nni.report_intermediate_result(logs['val_accuracy'])
+        """Reports intermediate loss to NNI framework"""
+        nni.report_intermediate_result(logs['val_loss'])
 
 def generate_csv(input_file, output_file):
 	with open(input_file) as f:
@@ -535,6 +538,7 @@ def main(args):
     if args.use_nni:
         tuned_params = nni.get_next_parameter()
         params.update(tuned_params)
+        print('Parameters updated!')
 
     # Configurations
     config = get_config(args.command, params)
@@ -546,7 +550,10 @@ def main(args):
 
     # Train or evaluate
     if args.command == "train":
-        train(params, model, config, args.dataset, args.val_dataset, args.output, args.use_validation)
+        history = train(params, model, config, args.dataset, args.val_dataset, args.output, args.use_validation)
+        if args.use_nni:
+            nni.report_final_result(history['val_loss'])
+
 
     elif args.command == "evaluate":
         # Validation dataset
