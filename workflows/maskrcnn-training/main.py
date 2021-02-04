@@ -417,7 +417,10 @@ def preprocess_inputs(args):
     if args.use_nni:
         tuned_params = nni.get_next_parameter()
         params.update(tuned_params)
+        params['output_dir'] = os.path.join(args.output, nni.get_trial_id())
         print('Parameters updated!')
+    else:
+        params['output_dir'] = args.output
     
     if 'stage-1-epochs' in params:
         params['stage_1_epochs'] = params.pop('stage-1-epochs')
@@ -537,24 +540,24 @@ def create_output_folders(output_dir):
 ############################################################
 
 def main(args):
-    
-    create_output_folders(args.output)
 
     params = preprocess_inputs(args)
+    
+    create_output_folders(params['output_dir'])
 
     # Configurations
     config = get_config(args.command, params)
     config.display()
 
     # Create model
-    model = create_model(args.command, config, args.output, args.model, args.ref_model_path)
+    model = create_model(args.command, config, params['output_dir'], args.model, args.ref_model_path)
 
 
     # Train or evaluate
     if args.command == "train":
-        history = train(params, model, config, args.dataset, args.val_dataset, args.output, args.use_validation)
+        history = train(params, model, config, args.dataset, args.val_dataset, params['output_dir'], args.use_validation)
         if args.use_nni:
-            nni.report_final_result(history['val_loss'])
+            nni.report_final_result(history['val_loss'][-1])
 
 
     elif args.command == "evaluate":
