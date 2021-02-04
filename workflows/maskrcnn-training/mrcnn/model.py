@@ -2406,8 +2406,6 @@ class MaskRCNN(object):
         )
         self.epoch = max(self.epoch, epochs)
 
-        print(history.history)
-
         return history.history
 
     def mold_inputs(self, images):
