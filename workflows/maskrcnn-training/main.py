@@ -32,6 +32,7 @@ import csv
 import shutil
 import yaml
 import numpy as np
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 from tensorflow.keras.callbacks import Callback
 from tensorflow.config import list_physical_devices
 
@@ -45,6 +46,7 @@ import urllib.request
 # Import Mask RCNN
 from mrcnn.config import Config
 from mrcnn import model as modellib, utils
+
 
 ############################################################
 #  Configurations
@@ -411,6 +413,11 @@ def preprocess_inputs(args):
         raise ValueError('Parameters must have a valid YAML format')
     if not isinstance(params, dict):
         raise TypeError('Parameters must have a valid YAML format')
+
+    if args.use_nni:
+        tuned_params = nni.get_next_parameter()
+        params.update(tuned_params)
+        print('Parameters updated!')
     
     if 'stage-1-epochs' in params:
         params['stage_1_epochs'] = params.pop('stage-1-epochs')
@@ -535,11 +542,6 @@ def main(args):
 
     params = preprocess_inputs(args)
 
-    if args.use_nni:
-        tuned_params = nni.get_next_parameter()
-        params.update(tuned_params)
-        print('Parameters updated!')
-
     # Configurations
     config = get_config(args.command, params)
     config.display()
@@ -572,13 +574,13 @@ if __name__ == '__main__':
     parser.add_argument("command",
                         metavar="<command>",
                         help="'train' or 'evaluate' on MS COCO")
-    parser.add_argument('--dataset', required=True,
+    parser.add_argument('--dataset', default="/mnt/data/datasets/train_set/",
                         metavar="/path/to/coco/",
                         help='Directory of the MS-COCO dataset')
-    parser.add_argument('--val_dataset',
+    parser.add_argument('--val_dataset', default="/mnt/data/datasets/eval_set/",
                         metavar="/path/to/coco/",
                         help='Directory of the validation MS-COCO dataset')
-    parser.add_argument('--model', required=True,
+    parser.add_argument('--model', default="workflow_maskrcnn",
                         metavar="/path/to/weights.h5",
                         help="Path to weights .h5 file or 'coco'")
     parser.add_argument('--output', required=False,
