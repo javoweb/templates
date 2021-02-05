@@ -313,7 +313,7 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
     augmentation = get_augmentations(params)
     custom_callbacks = None
     if use_nni:
-        custom_callbacks = [ReportIntermediates]
+        custom_callbacks = [ReportIntermediates()]
 
     # *** Training schedule ***
     history = dict()
