@@ -24,7 +24,6 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
 """
 
 import os
-from typing import Dict
 import nni
 import time
 import json
@@ -463,12 +462,9 @@ def get_config(command, params):
 
 
 def create_model(command, config, logs_dir, selected_model, ref_model_path='', use_nni=False):
-    if command == "train":
-        model = modellib.MaskRCNN(mode="training", config=config,
+    
+    model = modellib.MaskRCNN(mode="training", config=config,
                                   model_dir=logs_dir, use_nni=use_nni)
-    else:
-        model = modellib.MaskRCNN(mode="inference", config=config,
-                                  model_dir=logs_dir)
 
     # Select weights file to load
     if selected_model.lower() == "workflow_maskrcnn":
@@ -561,7 +557,7 @@ def main(args):
     config.display()
 
     # Create model
-    model = create_model(args.command, config, params['output_dir'], args.model, args.ref_model_path)
+    model = create_model(args.command, config, params['output_dir'], args.model, args.ref_model_path, args.use_nni)
 
 
     # Train or evaluate
