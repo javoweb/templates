@@ -10,8 +10,8 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import os
-import datetime
 import re
+import nni
 import math
 from collections import OrderedDict
 import multiprocessing
@@ -1805,7 +1805,7 @@ class MaskRCNN(object):
     The actual Keras model is in the keras_model property.
     """
 
-    def __init__(self, mode, config, model_dir):
+    def __init__(self, mode, config, model_dir, use_nni=False):
         """
         mode: Either "training" or "inference"
         config: A Sub-class of the Config class
@@ -1814,6 +1814,7 @@ class MaskRCNN(object):
         assert mode in ['training', 'inference']
         self.mode = mode
         self.config = config
+        self.use_nni = use_nni
         self.model_dir = model_dir
         self.set_log_dir()
         self.keras_model = self.build(mode=mode, config=config)
@@ -2225,33 +2226,15 @@ class MaskRCNN(object):
         """
         # Set date and epoch counter as if starting a new model
         self.epoch = 0
-        # now = datetime.datetime.now()
-
-        # # If we have a model path with date and epochs use them
-        # if model_path:
-        #     # Continue from we left of. Get epoch and date from the file name
-        #     # A sample model path might look like:
-        #     # \path\to\logs\coco20171029T2315\mask_rcnn_coco_0001.h5 (Windows)
-        #     # /path/to/logs/coco20171029T2315/mask_rcnn_coco_0001.h5 (Linux)
-        #     regex = r".*[/\\][\w-]+(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})[/\\]mask\_rcnn\_[\w-]+(\d{4})\.h5"
-        #     # Use string for regex since we might want to use pathlib.Path as model_path
-        #     m = re.match(regex, str(model_path))
-        #     if m:
-        #         now = datetime.datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)),
-        #                                 int(m.group(4)), int(m.group(5)))
-        #         # Epoch number in file is 1-based, and in Keras code it's 0-based.
-        #         # So, adjust for that then increment by one to start from the next epoch
-        #         self.epoch = int(m.group(6)) - 1 + 1
-        #         print('Re-starting from epoch %d' % self.epoch)
-
-        # Directory for training logs
-        # self.log_dir = os.path.join(self.model_dir, "{}{:%Y%m%dT%H%M}".format(
-        #     self.config.NAME.lower(), now))
         self.log_dir = self.model_dir
 
         # Path to save after each epoch. Include placeholders that get filled by Keras.
-        self.checkpoint_path = os.path.join(self.log_dir, "checkpoints/mask_rcnn_{}_*epoch*.h5".format(
-            self.config.NAME.lower()))
+        if self.use_nni:
+            self.checkpoint_path = os.path.join(self.log_dir, "checkpoints/{}/mask_rcnn_{}_*epoch*.h5".format(
+                nni.get_trial_id(), self.config.NAME.lower()))
+        else:    
+            self.checkpoint_path = os.path.join(self.log_dir, "checkpoints/mask_rcnn_{}_*epoch*.h5".format(
+                self.config.NAME.lower()))
         self.checkpoint_path = self.checkpoint_path.replace(
             "*epoch*", "{epoch:04d}")
 
@@ -2351,7 +2334,10 @@ class MaskRCNN(object):
 
 
         # Create log_dir if it does not exist
-        tensorboard_logs_dir = os.path.join(self.log_dir, "tensorboard/{}/".format(layer_id))
+        if self.use_nni:
+            tensorboard_logs_dir = os.path.join(self.log_dir, "tensorboard/{}/{}/".format(nni.get_trial_id(), layer_id))
+        else:
+            tensorboard_logs_dir = os.path.join(self.log_dir, "tensorboard/{}/".format(layer_id))
         if not os.path.exists(tensorboard_logs_dir):
             os.makedirs(tensorboard_logs_dir)
 

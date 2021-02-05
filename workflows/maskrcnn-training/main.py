@@ -359,7 +359,7 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
 
     # Extract trained model
     print("Training complete\n Extracting trained model")
-    extract_model(train_dataset, output_folder, config, params)
+    extract_model(train_dataset, output_folder, config, params, use_nni)
     print("Workflow complete!")
 
     return history
@@ -382,16 +382,18 @@ class ReportIntermediates(Callback):
         nni.report_intermediate_result(logs['val_loss'])
 
 def generate_csv(input_file, output_file):
-	with open(input_file) as f:
-		data = json.load(f)
+    with open(input_file) as f:
+        data = json.load(f)
 
-	csv_out = open(os.path.join(output_file, "classes.csv"), "w", newline='')
+    out_path = os.path.join(output_file, "classes.csv")
 
-	csv_writer = csv.writer(csv_out)
-	csv_writer.writerow(['labels','id'])
+    csv_out = open(out_path, "w", newline='')
 
-	for lbl in data['categories']:
-		csv_writer.writerow([lbl['name'], lbl['id']])
+    csv_writer = csv.writer(csv_out)
+    csv_writer.writerow(['labels','id'])
+
+    for lbl in data['categories']:
+        csv_writer.writerow([lbl['name'], lbl['id']])
 
 
 def preprocess_inputs(args):
@@ -417,10 +419,9 @@ def preprocess_inputs(args):
     if args.use_nni:
         tuned_params = nni.get_next_parameter()
         params.update(tuned_params)
-        params['output_dir'] = os.path.join(args.output, nni.get_trial_id())
         print('Parameters updated!')
-    else:
-        params['output_dir'] = args.output
+
+    params['output_dir'] = args.output
     
     if 'stage-1-epochs' in params:
         params['stage_1_epochs'] = params.pop('stage-1-epochs')
@@ -461,10 +462,10 @@ def get_config(command, params):
     return config
 
 
-def create_model(command, config, logs_dir, selected_model, ref_model_path=''):
+def create_model(command, config, logs_dir, selected_model, ref_model_path='', use_nni=False):
     if command == "train":
         model = modellib.MaskRCNN(mode="training", config=config,
-                                  model_dir=logs_dir)
+                                  model_dir=logs_dir, use_nni=use_nni)
     else:
         model = modellib.MaskRCNN(mode="inference", config=config,
                                   model_dir=logs_dir)
@@ -507,14 +508,24 @@ def create_model(command, config, logs_dir, selected_model, ref_model_path=''):
     return model
 
 
-def extract_model(train_dataset, output_dir, config, params):
+def extract_model(train_dataset, output_dir, config, params, use_nni=False):
+    if use_nni:
+        model_dir = os.path.join(output_dir, "{}/model".format(nni.get_trial_id()))
+        checkpoint_dir = os.path.join(output_dir, "{}/checkpoints".format(nni.get_trial_id()))
+    else:
+        model_dir = os.path.join(output_dir, "model")
+        checkpoint_dir = os.path.join(output_dir, "checkpoints")
+
+    if not os.path.isdir(model_dir):
+        os.makedirs(model_dir)
+
     generate_csv(
         os.path.join(train_dataset, "annotations/instances_default.json"), 
-        os.path.join(output_dir, "model")
+        model_dir
     )
     shutil.copyfile(
-        os.path.join(output_dir, "checkpoints/mask_rcnn_{}_{:04d}.h5".format(config.NAME.lower(), int(params['stage_3_epochs']))),
-        os.path.join(output_dir, "model/onepanel_trained_model.h5")
+        os.path.join(checkpoint_dir, "mask_rcnn_{}_{:04d}.h5".format(config.NAME.lower(), int(params['stage_3_epochs']))),
+        os.path.join(model_dir, "onepanel_trained_model.h5")
     )
 
 def get_augmentations(params):
@@ -528,7 +539,7 @@ def get_augmentations(params):
     return augmentation
 
 def create_output_folders(output_dir):
-    subdirs = ['tensorboard/heads', 'tensorboard/4+', 'tensorboard/all', 'checkpoints', 'model'] 
+    subdirs = ['tensorboard', 'checkpoints', 'model'] 
     for subdir in subdirs:
         dir = os.path.join(output_dir, subdir)
         if not os.path.isdir(dir):
