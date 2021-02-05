@@ -521,7 +521,7 @@ def save_best_metrics(metrics, default_metrics='val_loss', mode='min', use_nni=F
         return 
 
     metrics = [ 
-        {'name': metrics_key, 'value': str(metrics[metrics_key][-1])}
+        {'name': metrics_key, 'value': float(str(metrics[metrics_key][-1]))}
         for metrics_key in metrics.keys()
         if 'val' in metrics_key 
     ]
