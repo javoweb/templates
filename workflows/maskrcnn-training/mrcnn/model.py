@@ -2338,8 +2338,11 @@ class MaskRCNN(object):
             tensorboard_logs_dir = os.path.join(self.log_dir, "tensorboard/{}/{}/".format(nni.get_trial_id(), layer_id))
         else:
             tensorboard_logs_dir = os.path.join(self.log_dir, "tensorboard/{}/".format(layer_id))
+        
         if not os.path.exists(tensorboard_logs_dir):
             os.makedirs(tensorboard_logs_dir)
+        if not os.path.exists(os.path.dirname(self.checkpoint_path)):
+            os.makedirs(os.path.dirname(self.checkpoint_path))
 
         # Callbacks
         if self.config.TENSORBOARD_LOG_STEPS <= 0:
@@ -2355,7 +2358,7 @@ class MaskRCNN(object):
                 keras.callbacks.TensorBoard(log_dir=tensorboard_logs_dir, profile_batch=0, update_freq=self.config.TENSORBOARD_LOG_STEPS,
                                             histogram_freq=0, write_graph=True, write_images=False),
                 keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                                verbose=0, save_weights_only=True),
+                                                verbose=1, save_weights_only=True),
                 TqdmCallback()
             ]
 
