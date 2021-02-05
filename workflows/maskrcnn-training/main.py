@@ -562,7 +562,7 @@ def main(args):
 
     # Train or evaluate
     if args.command == "train":
-        history = train(params, model, config, args.dataset, args.val_dataset, params['output_dir'], args.use_validation)
+        history = train(params, model, config, args.dataset, args.val_dataset, params['output_dir'], args.use_validation, args.use_nni)
         if args.use_nni:
             nni.report_final_result(history['val_loss'][-1])
 
