@@ -506,8 +506,8 @@ def create_model(command, config, logs_dir, selected_model, ref_model_path='', u
 
 def extract_model(train_dataset, output_dir, config, params, use_nni=False):
     if use_nni:
-        model_dir = os.path.join(output_dir, "{}/model".format(nni.get_trial_id()))
-        checkpoint_dir = os.path.join(output_dir, "{}/checkpoints".format(nni.get_trial_id()))
+        model_dir = os.path.join(output_dir, "model/{}".format(nni.get_trial_id()))
+        checkpoint_dir = os.path.join(output_dir, "checkpoints/{}".format(nni.get_trial_id()))
     else:
         model_dir = os.path.join(output_dir, "model")
         checkpoint_dir = os.path.join(output_dir, "checkpoints")
