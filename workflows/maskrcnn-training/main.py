@@ -358,10 +358,8 @@ def train(params, model, config, train_dataset, val_dataset, output_folder, use_
 
     # Extract trained model
     print("Training complete\n Extracting trained model")
-    extract_model(train_dataset, output_folder, config, params, use_nni)
+    extract_model(train_dataset, output_folder, config, params, history, use_nni)
     print("Workflow complete!")
-
-    return history
 
 
 ############################################################
@@ -503,17 +501,49 @@ def create_model(command, config, logs_dir, selected_model, ref_model_path='', u
         model.load_weights(model_path, by_name=True)
     return model
 
+def save_best_metrics(metrics, default_metrics='val_loss', mode='min', use_nni=False):
+    if mode == max:
+        prev_default_metrics = 0.0
+    else:
+        prev_default_metrics = 1e10
 
-def extract_model(train_dataset, output_dir, config, params, use_nni=False):
+    # Get existing metrics if any
+    try:
+        with open('/tmp/sys-metrics.json') as f:
+            prev_metrics = json.load(f)
+            prev_default_metrics = [m['value'] for m in prev_metrics if m['name'] == default_metrics][0]
+    except FileNotFoundError:
+        pass
+
+    # Write metrics if new accuracy is better
+    if (( mode == 'max' and prev_default_metrics > metrics[default_metrics][-1]) or 
+            (mode == 'min' and prev_default_metrics < metrics[default_metrics][-1])):
+        return 
+
+    metrics = [ 
+        {'name': metrics_key, 'value': str(metrics[metrics_key][-1])}
+        for metrics_key in metrics.keys()
+        if 'val' in metrics_key 
+    ]
+
+    with open('/tmp/sys-metrics.json', 'w') as f:
+        json.dump(metrics, f)
+
+    print('Best metrics saved')
+
+def extract_model(train_dataset, output_dir, config, params, history, use_nni=False):
     if use_nni:
         model_dir = os.path.join(output_dir, "model/{}".format(nni.get_trial_id()))
         checkpoint_dir = os.path.join(output_dir, "checkpoints/{}".format(nni.get_trial_id()))
+        nni.report_final_result(history['val_loss'][-1])
     else:
         model_dir = os.path.join(output_dir, "model")
         checkpoint_dir = os.path.join(output_dir, "checkpoints")
 
     if not os.path.isdir(model_dir):
         os.makedirs(model_dir)
+    
+    save_best_metrics(history, use_nni=use_nni)
 
     generate_csv(
         os.path.join(train_dataset, "annotations/instances_default.json"), 
@@ -562,9 +592,7 @@ def main(args):
 
     # Train or evaluate
     if args.command == "train":
-        history = train(params, model, config, args.dataset, args.val_dataset, params['output_dir'], args.use_validation, args.use_nni)
-        if args.use_nni:
-            nni.report_final_result(history['val_loss'][-1])
+        train(params, model, config, args.dataset, args.val_dataset, params['output_dir'], args.use_validation, args.use_nni)
 
 
     elif args.command == "evaluate":
