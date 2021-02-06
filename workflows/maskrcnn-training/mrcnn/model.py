@@ -2346,7 +2346,7 @@ class MaskRCNN(object):
                 keras.callbacks.TensorBoard(log_dir=tensorboard_logs_dir, profile_batch=0,
                                             histogram_freq=0, write_graph=True, write_images=False),
                 keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                                verbose=1, save_weights_only=True),
+                                                verbose=0, save_weights_only=True),
                 TqdmCallback()
             ]
         else:
@@ -2354,7 +2354,7 @@ class MaskRCNN(object):
                 keras.callbacks.TensorBoard(log_dir=tensorboard_logs_dir, profile_batch=0, update_freq=self.config.TENSORBOARD_LOG_STEPS,
                                             histogram_freq=0, write_graph=True, write_images=False),
                 keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                                verbose=1, save_weights_only=True),
+                                                verbose=0, save_weights_only=True),
                 TqdmCallback()
             ]
 
