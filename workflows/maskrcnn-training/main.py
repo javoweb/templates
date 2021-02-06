@@ -549,16 +549,21 @@ def extract_model(train_dataset, output_dir, config, params, history, use_nni=Fa
     is_best_model = save_best_metrics(history)
 
     if is_best_model:
-        save_best_model(train_dataset, model_dir, checkpoint_dir, config, params)
+        save_best_model(train_dataset, model_dir, checkpoint_dir, config, params, use_nni)
 
     shutil.rmtree(checkpoint_dir)
 
 
-def save_best_model(train_dataset, model_dir, checkpoint_dir, config, params):
+def save_best_model(train_dataset, model_dir, checkpoint_dir, config, params, use_nni=False):
     generate_csv(
         os.path.join(train_dataset, "annotations/instances_default.json"), 
         model_dir
     )
+    if use_nni:
+        tuned_params = nni.get_current_parameter()
+        with open(os.path.join(model_dir, "parameters.json"), 'w') as f:
+            json.dump(tuned_params, f)
+        print('parameters Saved')
     shutil.copyfile(
         os.path.join(checkpoint_dir, "mask_rcnn_{}_{:04d}.h5".format(config.NAME.lower(), int(params['stage_3_epochs']))),
         os.path.join(model_dir, "onepanel_trained_model.h5")
