@@ -501,7 +501,8 @@ def create_model(command, config, logs_dir, selected_model, ref_model_path='', u
         model.load_weights(model_path, by_name=True)
     return model
 
-def save_best_metrics(metrics, default_metrics='val_loss', mode='min', use_nni=False):
+def save_best_metrics(metrics, default_metrics='val_loss', mode='min'):
+    
     if mode == max:
         prev_default_metrics = 0.0
     else:
@@ -518,7 +519,7 @@ def save_best_metrics(metrics, default_metrics='val_loss', mode='min', use_nni=F
     # Write metrics if new accuracy is better
     if (( mode == 'max' and prev_default_metrics > metrics[default_metrics][-1]) or 
             (mode == 'min' and prev_default_metrics < metrics[default_metrics][-1])):
-        return 
+        return False
 
     metrics = [ 
         {'name': metrics_key, 'value': float(str(metrics[metrics_key][-1]))}
@@ -531,20 +532,29 @@ def save_best_metrics(metrics, default_metrics='val_loss', mode='min', use_nni=F
 
     print('Best metrics saved')
 
+    return True
+
 def extract_model(train_dataset, output_dir, config, params, history, use_nni=False):
+    
+    
     if use_nni:
-        model_dir = os.path.join(output_dir, "model/{}".format(nni.get_trial_id()))
-        checkpoint_dir = os.path.join(output_dir, "checkpoints/{}".format(nni.get_trial_id()))
         nni.report_final_result(history['val_loss'][-1])
-    else:
-        model_dir = os.path.join(output_dir, "model")
-        checkpoint_dir = os.path.join(output_dir, "checkpoints")
+    
+    model_dir = os.path.join(output_dir, "model")
+    checkpoint_dir = os.path.join(output_dir, "checkpoints")
 
     if not os.path.isdir(model_dir):
         os.makedirs(model_dir)
     
-    save_best_metrics(history, use_nni=use_nni)
+    is_best_model = save_best_metrics(history)
 
+    if is_best_model:
+        save_best_model(train_dataset, model_dir, checkpoint_dir, config, params)
+
+    shutil.rmtree(checkpoint_dir)
+
+
+def save_best_model(train_dataset, model_dir, checkpoint_dir, config, params):
     generate_csv(
         os.path.join(train_dataset, "annotations/instances_default.json"), 
         model_dir

@@ -2229,11 +2229,7 @@ class MaskRCNN(object):
         self.log_dir = self.model_dir
 
         # Path to save after each epoch. Include placeholders that get filled by Keras.
-        if self.use_nni:
-            self.checkpoint_path = os.path.join(self.log_dir, "checkpoints/{}/mask_rcnn_{}_*epoch*.h5".format(
-                nni.get_trial_id(), self.config.NAME.lower()))
-        else:    
-            self.checkpoint_path = os.path.join(self.log_dir, "checkpoints/mask_rcnn_{}_*epoch*.h5".format(
+        self.checkpoint_path = os.path.join(self.log_dir, "checkpoints/mask_rcnn_{}_*epoch*.h5".format(
                 self.config.NAME.lower()))
         self.checkpoint_path = self.checkpoint_path.replace(
             "*epoch*", "{epoch:04d}")
